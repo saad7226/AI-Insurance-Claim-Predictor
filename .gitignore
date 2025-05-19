@@ -170,5 +170,10 @@ cython_debug/
 # Ruff stuff:
 .ruff_cache/
 
+#Project-Specific Exclusions
+*.csv
+*.pkl
+*.log
+
 # PyPI configuration file
 .pypirc
