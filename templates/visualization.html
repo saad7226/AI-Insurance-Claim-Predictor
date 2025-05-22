@@ -1,0 +1,18 @@
+{% extends 'layout.html' %}
+{% block title %}Visualization{% endblock %}
+{% block content %}
+<div class="card shadow-lg card-gradient">
+    <div class="card-header bg-transparent text-white">
+        <h2>Visualizations</h2>
+    </div>
+    <div class="card-body text-center">
+        <p class="text-white mb-4">This heatmap displays Pearson correlation coefficients between the top 20 numerical
+            features. Red indicates a strong positive correlation (up to 1), blue a strong negative correlation (down to
+            -1), and white near 0 (no correlation). The upper triangle is masked for clarity.</p>
+        <img src="{{ url_for('static', filename='images/corr_matrix.png') }}" class="img-fluid"
+            alt="Correlation Matrix">
+        <p class="text-white mt-2"><small>Click <a href="{{ url_for('static', filename='images/corr_matrix.png') }}"
+                    target="_blank" class="text-white">here</a> to view full size.</small></p>
+    </div>
+</div>
+{% endblock %}

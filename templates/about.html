@@ -1,0 +1,25 @@
+{% extends 'layout.html' %}
+{% block title %}About Us{% endblock %}
+{% block content %}
+<div class="card shadow-lg card-gradient">
+    <div class="card-header bg-transparent text-white">
+        <h2>About Our Team</h2>
+    </div>
+    <div class="card-body">
+        <div class="row row-cols-1 row-cols-md-3 g-4">
+            {% for member in team %}
+            <div class="col">
+                <div class="card h-100 bg-white shadow-sm">
+                    <img src="{{ url_for('static', filename='images/' ~ member.image) }}" class="card-img-top img-fluid"
+                        alt="{{ member.name }}">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">{{ member.name }}</h5>
+                        <p class="card-text">{{ member.desc }}</p>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

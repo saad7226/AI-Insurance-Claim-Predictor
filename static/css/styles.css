@@ -1,0 +1,145 @@
+/* Define color variables for consistency */
+:root {
+    --primary-color: #FF6B6B;
+    --secondary-color: #4ECDC4;
+    --accent-color: #45B7D1;
+    --background-color: #F7F9FB;
+    --text-color: #333333;
+}
+
+/* Body with subtle gradient */
+body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(135deg, var(--background-color), #e0f7fa);
+    font-family: 'Poppins', sans-serif;
+    color: var(--text-color);
+}
+
+/* Main content fade-in */
+main {
+    flex: 1;
+    animation: fadeIn 1s ease-in;
+}
+
+/* Navbar customization */
+.navbar {
+    background: linear-gradient(90deg, var(--primary-color), var(--secondary-color)) !important;
+}
+
+/* Card styles with gradient and shadow */
+.card-gradient {
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.card-gradient:hover {
+    transform: translateY(-10px);
+    box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3);
+}
+
+/* Button styles with gradient */
+.gradient-btn {
+    background: linear-gradient(45deg, var(--primary-color), var(--accent-color));
+    border: none;
+    padding: 10px 20px;
+    color: white;
+    transition: all 0.3s ease;
+}
+
+.gradient-btn:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(255, 107, 107, 0.4);
+    color: white;
+}
+
+/* Image styles */
+.img-fluid {
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    transition: transform 0.3s ease;
+    max-width: 100%;
+}
+
+.img-fluid:hover {
+    transform: scale(1.05);
+}
+
+/* Footer gradient */
+footer {
+    background: linear-gradient(90deg, #1a1a1a, var(--secondary-color));
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.05);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+/* Spinning loader for prediction */
+.loader {
+    border: 8px solid #f3f3f3;
+    border-top: 8px solid var(--primary-color);
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    animation: spin 2s linear infinite;
+    margin: 20px auto;
+    display: none;
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* Accessibility: Focus styles */
+a:focus,
+button:focus,
+input:focus {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    h1 {
+        font-size: 2rem;
+    }
+
+    .card {
+        margin-bottom: 20px;
+    }
+
+    .gradient-btn {
+        padding: 8px 16px;
+    }
+}

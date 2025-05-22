@@ -1,0 +1,50 @@
+{% extends 'layout.html' %}
+{% block title %}Prediction{% endblock %}
+{% block content %}
+<div class="card shadow-lg card-gradient">
+    <div class="card-header bg-transparent text-white">
+        <h2>Predict Insurance Claim Risk</h2>
+    </div>
+    <div class="card-body">
+        {% if error %}
+        <div class="alert alert-danger">{{ error }}</div>
+        {% endif %}
+        <form method="POST" id="prediction-form">
+            <div class="row">
+                {% for feat in original_features %}
+                <div class="col-12 col-md-6 mb-3">
+                    <label for="{{ feat }}" class="text-white">{{ feat }}</label>
+                    <input type="text" class="form-control" id="{{ feat }}" name="{{ feat }}"
+                        placeholder="Enter {{ feat }}" required>
+                </div>
+                {% endfor %}
+            </div>
+            <button type="submit" class="btn gradient-btn">Predict</button>
+        </form>
+        <div id="loader" class="loader"></div>
+        <div class="mt-4">
+            <h4 class="text-white">Model Accuracies</h4>
+            <div class="card bg-white p-3 shadow-sm">
+                <p><strong>Random Forest:</strong> {{ '{:.2f}'.format(rf_accuracy * 100) }}%</p>
+                <p><strong>ANN:</strong> {{ '{:.2f}'.format(ann_accuracy * 100) }}%</p>
+            </div>
+        </div>
+        {% if prediction %}
+        <div class="mt-4">
+            <h4 class="text-white">Results</h4>
+            <div class="card bg-white p-3 shadow-sm">
+                <p><strong>Random Forest:</strong> {{ prediction.rf }} (Accuracy: {{ '{:.2f}'.format(prediction.rf_acc *
+                    100) }}%)</p>
+                <p><strong>ANN:</strong> {{ prediction.ann }} (Accuracy: {{ '{:.2f}'.format(prediction.ann_acc * 100)
+                    }}%)</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+<script>
+    document.getElementById('prediction-form').addEventListener('submit', function () {
+        document.getElementById('loader').style.display = 'block';
+    });
+</script>
+{% endblock %}
