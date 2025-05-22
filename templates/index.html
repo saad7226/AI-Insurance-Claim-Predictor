@@ -1,0 +1,13 @@
+{% extends 'layout.html' %}
+{% block title %}Home{% endblock %}
+{% block content %}
+<div class="text-center py-5">
+    <h1 class="display-3"
+        style="background: linear-gradient(90deg, var(--primary-color), var(--secondary-color)); background-clip: text; -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+        Welcome to AI Insurance Predictor
+    </h1>
+    <p class="lead text-muted">Predict insurance claim risks with cutting-edge machine learning.</p>
+    <a href="{{ url_for('prediction') }}" class="btn btn-lg gradient-btn" style="animation: pulse 2s infinite;">Get
+        Started</a>
+</div>
+{% endblock %}

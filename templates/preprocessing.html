@@ -1,0 +1,15 @@
+{% extends 'layout.html' %}
+{% block title %}Preprocessing Results{% endblock %}
+{% block content %}
+<div class="card shadow-lg card-gradient">
+    <div class="card-header bg-transparent text-white">
+        <h2>Preprocessing Results</h2>
+    </div>
+    <div class="card-body text-center">
+        <p class="text-white mb-4">{{ results | safe }} <br> The heatmap below shows missing values (yellow) before
+            preprocessing, with purple indicating present data.</p>
+        <img src="{{ url_for('static', filename='images/missing_heatmap.png') }}" class="img-fluid"
+            alt="Missing Values Heatmap (Before)">
+    </div>
+</div>
+{% endblock %}
