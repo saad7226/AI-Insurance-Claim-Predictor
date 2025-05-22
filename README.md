@@ -79,8 +79,8 @@ Deployment: Render,
 Models
 The project uses the following machine learning algorithms:
 
-Random Forest
-Artificial Neural Network (ANN)
+Random Forest (Accuracy=96.3%)
+Artificial Neural Network ANN (Accuracy=96.1%)
 
 Dataset
 
@@ -108,6 +108,17 @@ We thank Lecturer Mustajab Hussain for assigning this insightful project and Por
 Outputs
 ![image](https://github.com/user-attachments/assets/225f043f-d30a-409a-a5bd-9647084d72d0)
 ![image](https://github.com/user-attachments/assets/0ef15996-0483-481a-8d7f-470dd2cd7603)
+![image](https://github.com/user-attachments/assets/13def5fd-cbc7-45e4-9079-b732f22b2d20)
+![image](https://github.com/user-attachments/assets/4a4b630f-66d5-49db-b6c1-ac84ceee3b20)
+![image](https://github.com/user-attachments/assets/da6e6602-6a51-4c2a-ad4e-6d54bec22266)
+![image](https://github.com/user-attachments/assets/e9339244-2475-40d0-9404-27360c8f2b0f)
+![image](https://github.com/user-attachments/assets/a38a0272-19a0-4ea5-ac4a-586d33e90c70)
+![image](https://github.com/user-attachments/assets/c479a0b6-a8db-4165-8eb4-ac181eaa3edb)
+
+
+
+
+
 
 
 
