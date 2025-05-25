@@ -1,3 +1,5 @@
+import os
+import requests
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -9,6 +11,7 @@ import numpy as np
 from config import Config
 import logging
 
+# Initialize Flask application
 app = Flask(__name__, template_folder='templates', static_folder='static')
 app.config.from_object(Config)
 
@@ -18,6 +21,39 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
     logging.StreamHandler()
 ])
 logger = logging.getLogger(__name__)
+
+# Function to download files from Google Drive
+def download_from_drive(file_id, local_path):
+    if not os.path.exists(local_path):
+        try:
+            url = f"https://drive.google.com/uc?export=download&id={file_id}"
+            response = requests.get(url, stream=True)
+            response.raise_for_status()
+            with open(local_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+            logger.info(f"Downloaded {local_path} from Google Drive.")
+        except Exception as e:
+            logger.error(f"Failed to download {local_path}: {e}")
+            raise
+
+# File IDs from Google Drive links
+file_ids = {
+    f'rf_model_v{Config.VERSION}.pkl': '1n1BK1Y2mVeYvA4qzv4Ay7sapbJ4qv',
+    f'ann_model_v{Config.VERSION}.pkl': '1W_DvTaLT5BM3icqC9wnWv-xjASGvgb',
+    'encoder.pkl': '1Ec0fA5-1vWap5rYlnGi2GB4tvAQfXy',
+    'scaler.pkl': '1WWhzFmSF9X4qjdC5o9jR5u80DRW8W1',
+    'feature_info.pkl': '1HoiKp0de-jhykf0_sEKc2wpURVA6w-',
+    'model_accuracies.pkl': '14hj2y3wLLfx0r-ORi2Ae5Y7L17iD'
+}
+
+# Create models directory if it doesn't exist
+os.makedirs('models', exist_ok=True)
+
+# Download all .pkl files if they don't exist locally
+for filename, file_id in file_ids.items():
+    local_path = os.path.join('models', filename)
+    download_from_drive(file_id, local_path)
 
 # Load models and preprocessors
 try:
@@ -45,6 +81,7 @@ except FileNotFoundError as e:
     logger.error(f"Missing file: {e}")
     raise
 
+# Define model features
 cat_encoded_cols = [f"{col}_{val}" for i, col in enumerate(categorical_features) for val in loaded_encoder.categories_[i]]
 model_features = numerical_features + cat_encoded_cols
 
@@ -74,7 +111,7 @@ def data_analysis():
             'class_dist': train_data['target'].value_counts().to_dict()
         }
         plt.figure(figsize=(8, 6))
-        train_data['target'] = train_data['target'].astype(int)  # Cast to int
+        train_data['target'] = train_data['target'].astype(int)
         sns.countplot(data=train_data, x='target')
         plt.title('Class Distribution')
         plt.xlabel('Target (0: No Claim, 1: Claim)')
@@ -86,7 +123,7 @@ def data_analysis():
     except Exception as e:
         logger.error(f"Error in data_analysis: {e}")
         return render_template('data_analysis.html', error=str(e))
-    
+
 @app.route('/preprocessing')
 def preprocessing():
     try:
@@ -123,8 +160,6 @@ def visualization():
 
         plt.figure(figsize=(12, 10))
         corr = numeric_data.corr()
-
-        
         mask = np.triu(np.ones_like(corr), k=1)
         sns.heatmap(corr, mask=mask, annot=True, cmap='coolwarm', fmt='.2f', vmin=-1, vmax=1, center=0,
                     annot_kws={"size": 8}, square=True, cbar_kws={"shrink": .5})
@@ -139,7 +174,7 @@ def visualization():
     except Exception as e:
         logger.error(f"Error in visualization: {e}")
         return render_template('visualization.html', error=str(e))
-    
+
 @app.route('/prediction', methods=['GET', 'POST'])
 def prediction():
     error = None
@@ -168,14 +203,14 @@ def prediction():
                             input_data[feat] = value_float
                         except ValueError as e:
                             raise ValueError(str(e))
-                    else: 
+                    else:
                         try:
-                            value_int = int(value)  
+                            value_int = int(value)
                         except ValueError:
                             raise ValueError(f"Invalid input for {feat}: {value}. Must be an integer.")
                         if value_int not in valid_categories.get(feat, []):
                             raise ValueError(f"Invalid category for {feat}. Valid values are: {valid_categories.get(feat, [])}")
-                        input_data[feat] = value_int  
+                        input_data[feat] = value_int
 
             logger.info("Input data prepared: %s", input_data)
             input_df = pd.DataFrame([input_data])
@@ -220,7 +255,7 @@ def prediction():
         logger.error(f"Error in prediction: {e}")
         error = str(e)
         return render_template('prediction.html', prediction=None, original_features=original_features, rf_accuracy=rf_accuracy, ann_accuracy=ann_accuracy, error=error)
-    
+
 @app.route('/about')
 def about():
     team = [
