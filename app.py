@@ -39,12 +39,12 @@ def download_from_drive(file_id, local_path):
 
 # File IDs from Google Drive links
 file_ids = {
-    f'rf_model_v{Config.VERSION}.pkl': '1n1BK1Y2mVeYvA4qzv4Ay7sapbJ4qv',
-    f'ann_model_v{Config.VERSION}.pkl': '1W_DvTaLT5BM3icqC9wnWv-xjASGvgb',
-    'encoder.pkl': '1Ec0fA5-1vWap5rYlnGi2GB4tvAQfXy',
-    'scaler.pkl': '1WWhzFmSF9X4qjdC5o9jR5u80DRW8W1',
-    'feature_info.pkl': '1HoiKp0de-jhykf0_sEKc2wpURVA6w-',
-    'model_accuracies.pkl': '14hj2y3wLLfx0r-ORi2Ae5Y7L17iD'
+    f'rf_model_v{Config.VERSION}.pkl': '1n1BKl3YZmVeYvzA4gzv4Ay7SapbJ44qv',
+    f'ann_model_v{Config.VERSION}.pkl': '1W_DvTaLT5BM3icqgC9wnlYx-vjASGvbg',
+    'encoder.pkl': '1Ec0fuA51vWqp5rLYnGi2GB4sTvAQxFXy',
+    'scaler.pkl': '1WwhZFmSF9X4qtjdc5o9jRj5J80DRW8W1',
+    'feature_info.pkl': '1HoiKpOdE-jhykfvO_sEkC2wqvURVA6w-',
+    'model_accuracies.pkl': '14hJ2yi3wLLfXr0J-ORlzAeFsY7L178lD'
 }
 
 # Create models directory if it doesn't exist
