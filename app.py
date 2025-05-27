@@ -33,7 +33,7 @@ def download_from_drive(file_id, local_path):
                 first_bytes = f.read(10)
                 if first_bytes.startswith(b'<!DOCTYPE') or first_bytes.startswith(b'<html'):
                     os.remove(local_path)
-                    raise ValueError(f"Downloaded file {local_path} is an HTML page, not the expected pickle file.")
+                    raise ValueError(f"Downloaded file {local_path} is an HTML page, not the expected file.")
             logger.info(f"Downloaded {local_path} from Google Drive.")
         except Exception as e:
             logger.error(f"Failed to download {local_path}: {e}")
@@ -46,18 +46,23 @@ file_ids = {
     'encoder.pkl': '1Ec0fuA51vWqp5rLYnGi2GB4sTvAQxFXy',
     'scaler.pkl': '1WwhZFmSF9X4qtjdc5o9jRj5J80DRW8W1',
     'feature_info.pkl': '1HoiKpOdE-jhykfvO_sEkC2wqvURVA6w-',
-    'model_accuracies.pkl': '14hJ2yi3wLLfXr0J-ORlzAeFsY7L178lD'
+    'model_accuracies.pkl': '14hJ2yi3wLLfXr0J-ORlzAeFsY7L178lD',
+    'train.csv': '1sauHOKJ6FBplEZuKZQUHiwbkT_OJtWx4',  # train.csv file ID
+    'test.csv': '1Ahd_2xcrlPHUZjrwH3xOCk2Nu7tkdh3M'   # test.csv file ID
 }
 
 # Create models directory if it doesn’t exist
 os.makedirs('models', exist_ok=True)
 
-# Download all .pkl files if they don’t exist locally
+# Download all .pkl files and CSV files if they don’t exist locally
 for filename, file_id in file_ids.items():
-    local_path = os.path.join('models', filename)
+    if filename.endswith('.pkl'):
+        local_path = os.path.join('models', filename)
+    else:
+        local_path = filename  # CSV files saved in root directory
     download_from_drive(file_id, local_path)
 
-# Load feature info and accuracies (small files) at startup
+# Load feature info and accuracies at startup
 try:
     with open('models/feature_info.pkl', 'rb') as f:
         feature_info = pickle.load(f)
@@ -76,13 +81,18 @@ except pickle.UnpicklingError as e:
     logger.error(f"Unpickling error: {e}")
     raise
 
-# Load train_data for analysis (assumed to be reasonable size)
+# Load train_data for analysis
 try:
     train_data = pd.read_csv('train.csv')
     logger.info("train.csv loaded successfully")
-except FileNotFoundError as e:
+except Exception as e:
     logger.error(f"Failed to load train.csv: {e}")
     train_data = pd.DataFrame(columns=original_features)
+
+# Validate train_data
+if train_data.empty or 'target' not in train_data.columns:
+    logger.error("train_data is empty or missing 'target' column")
+    train_data = pd.DataFrame(columns=original_features)  # Reset to empty DataFrame
 
 numerical_ranges = {col: (train_data[col].min(), train_data[col].max()) for col in numerical_features if col in train_data.columns}
 valid_categories = {col: list(pd.read_pickle('models/encoder.pkl').categories_[i]) for i, col in enumerate(categorical_features)}
@@ -95,6 +105,9 @@ def index():
 @app.route('/data_analysis')
 def data_analysis():
     try:
+        if train_data.empty or 'target' not in train_data.columns:
+            raise ValueError("train_data is empty or missing 'target' column. Please ensure train.csv is correctly loaded.")
+        
         summary = {
             'head': train_data.head().to_html(classes='table table-striped', header="true"),
             'missing': train_data.isnull().sum().to_dict(),
@@ -119,6 +132,9 @@ def data_analysis():
 @app.route('/preprocessing')
 def preprocessing():
     try:
+        if train_data.empty:
+            raise ValueError("train_data is empty. Please ensure train.csv is correctly loaded.")
+        
         missing_count = train_data.isnull().sum().sum()
         if missing_count == 0:
             results = "<p>No missing values detected in the dataset. Preprocessing steps (imputation and encoding) were applied, but no imputation was necessary.</p>"
