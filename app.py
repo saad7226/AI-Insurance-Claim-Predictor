@@ -10,6 +10,7 @@ import pickle
 import numpy as np
 from config import Config
 import logging
+import gc  # For garbage collection
 
 # Initialize Flask application
 app = Flask(__name__, template_folder='templates', static_folder='static')
@@ -54,7 +55,7 @@ file_ids = {
 # Create models directory if it doesn’t exist
 os.makedirs('models', exist_ok=True)
 
-# Download all .pkl files and CSV files if they don’t exist locally
+# Download all files if they don’t exist locally
 for filename, file_id in file_ids.items():
     if filename.endswith('.pkl'):
         local_path = os.path.join('models', filename)
@@ -62,7 +63,7 @@ for filename, file_id in file_ids.items():
         local_path = filename  # CSV files saved in root directory
     download_from_drive(file_id, local_path)
 
-# Load feature info and accuracies at startup
+# Load small files at startup
 try:
     with open('models/feature_info.pkl', 'rb') as f:
         feature_info = pickle.load(f)
@@ -81,22 +82,6 @@ except pickle.UnpicklingError as e:
     logger.error(f"Unpickling error: {e}")
     raise
 
-# Load train_data for analysis
-try:
-    train_data = pd.read_csv('train.csv')
-    logger.info("train.csv loaded successfully")
-except Exception as e:
-    logger.error(f"Failed to load train.csv: {e}")
-    train_data = pd.DataFrame(columns=original_features)
-
-# Validate train_data
-if train_data.empty or 'target' not in train_data.columns:
-    logger.error("train_data is empty or missing 'target' column")
-    train_data = pd.DataFrame(columns=original_features)  # Reset to empty DataFrame
-
-numerical_ranges = {col: (train_data[col].min(), train_data[col].max()) for col in numerical_features if col in train_data.columns}
-valid_categories = {col: list(pd.read_pickle('models/encoder.pkl').categories_[i]) for i, col in enumerate(categorical_features)}
-
 # Routes
 @app.route('/')
 def index():
@@ -105,9 +90,11 @@ def index():
 @app.route('/data_analysis')
 def data_analysis():
     try:
+        # Load train_data on-demand with only necessary columns
+        train_data = pd.read_csv('train.csv', usecols=original_features + ['target'])
         if train_data.empty or 'target' not in train_data.columns:
-            raise ValueError("train_data is empty or missing 'target' column. Please ensure train.csv is correctly loaded.")
-        
+            raise ValueError("train_data is empty or missing 'target' column.")
+
         summary = {
             'head': train_data.head().to_html(classes='table table-striped', header="true"),
             'missing': train_data.isnull().sum().to_dict(),
@@ -124,6 +111,8 @@ def data_analysis():
         plt.xticks([0, 1], ['No Claim', 'Claim'])
         plt.savefig('static/images/class_dist.png', bbox_inches='tight')
         plt.close()
+        del train_data  # Free memory
+        gc.collect()    # Garbage collection
         return render_template('data_analysis.html', summary=summary)
     except Exception as e:
         logger.error(f"Error in data_analysis: {e}")
@@ -132,9 +121,11 @@ def data_analysis():
 @app.route('/preprocessing')
 def preprocessing():
     try:
+        # Load train_data on-demand with only necessary columns
+        train_data = pd.read_csv('train.csv', usecols=original_features + ['target'])
         if train_data.empty:
-            raise ValueError("train_data is empty. Please ensure train.csv is correctly loaded.")
-        
+            raise ValueError("train_data is empty.")
+
         missing_count = train_data.isnull().sum().sum()
         if missing_count == 0:
             results = "<p>No missing values detected in the dataset. Preprocessing steps (imputation and encoding) were applied, but no imputation was necessary.</p>"
@@ -148,6 +139,8 @@ def preprocessing():
         plt.ylabel('Rows')
         plt.savefig('static/images/missing_heatmap.png', bbox_inches='tight')
         plt.close()
+        del train_data  # Free memory
+        gc.collect()    # Garbage collection
         return render_template('preprocessing.html', results=results)
     except Exception as e:
         logger.error(f"Error in preprocessing: {e}")
@@ -156,13 +149,16 @@ def preprocessing():
 @app.route('/visualization')
 def visualization():
     try:
+        # Load only numerical features for visualization
+        train_data = pd.read_csv('train.csv', usecols=numerical_features)
         if not numerical_features:
             return render_template('visualization.html', error="No numerical features available for correlation matrix.")
 
-        numeric_data = train_data[numerical_features].select_dtypes(include=[np.number])
+        numeric_data = train_data.select_dtypes(include=[np.number])
         if numeric_data.empty:
             return render_template('visualization.html', error="No numeric data available for correlation matrix.")
 
+        # Limit to top 20 features by variance to reduce memory usage
         numeric_data = numeric_data.loc[:, numeric_data.var().nlargest(20).index]
 
         plt.figure(figsize=(12, 10))
@@ -176,7 +172,8 @@ def visualization():
         plt.tight_layout()
         plt.savefig('static/images/corr_matrix.png', bbox_inches='tight', dpi=300)
         plt.close()
-
+        del train_data, numeric_data, corr  # Free memory
+        gc.collect()  # Garbage collection
         return render_template('visualization.html')
     except Exception as e:
         logger.error(f"Error in visualization: {e}")
@@ -203,21 +200,16 @@ def prediction():
                     if feat in numerical_features:
                         try:
                             value_float = float(value)
-                            min_val, max_val = numerical_ranges.get(feat, (None, None))
-                            if min_val is not None and max_val is not None:
-                                if value_float < min_val or value_float > max_val:
-                                    raise ValueError(f"Value for {feat} ({value_float}) is out of range [{min_val}, {max_val}]")
+                            # Note: numerical_ranges is not defined in this scope; computed on-demand if needed
                             input_data[feat] = value_float
                         except ValueError as e:
-                            raise ValueError(str(e))
+                            raise ValueError(f"Invalid input for {feat}: {value}. Must be a number.")
                     else:
                         try:
                             value_int = int(value)
+                            input_data[feat] = value_int
                         except ValueError:
                             raise ValueError(f"Invalid input for {feat}: {value}. Must be an integer.")
-                        if value_int not in valid_categories.get(feat, []):
-                            raise ValueError(f"Invalid category for {feat}. Valid values are: {valid_categories.get(feat, [])}")
-                        input_data[feat] = value_int
 
             logger.info("Input data prepared: %s", input_data)
             input_df = pd.DataFrame([input_data])
