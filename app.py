@@ -1,5 +1,5 @@
 import os
-import requests
+import gdown  # Replace requests with gdown
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -22,16 +22,18 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 ])
 logger = logging.getLogger(__name__)
 
-# Function to download files from Google Drive
+# Function to download files from Google Drive using gdown
 def download_from_drive(file_id, local_path):
     if not os.path.exists(local_path):
         try:
-            url = f"https://drive.google.com/uc?export=download&id={file_id}"
-            response = requests.get(url, stream=True)
-            response.raise_for_status()
-            with open(local_path, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    f.write(chunk)
+            url = f"https://drive.google.com/uc?id={file_id}"
+            gdown.download(url, local_path, quiet=False)
+            # Validate the downloaded file is not an HTML page
+            with open(local_path, 'rb') as f:
+                first_bytes = f.read(10)
+                if first_bytes.startswith(b'<!DOCTYPE') or first_bytes.startswith(b'<html'):
+                    os.remove(local_path)
+                    raise ValueError(f"Downloaded file {local_path} is an HTML page, not the expected pickle file.")
             logger.info(f"Downloaded {local_path} from Google Drive.")
         except Exception as e:
             logger.error(f"Failed to download {local_path}: {e}")
@@ -80,6 +82,9 @@ try:
 except FileNotFoundError as e:
     logger.error(f"Missing file: {e}")
     raise
+except pickle.UnpicklingError as e:
+    logger.error(f"Unpickling error: {e}")
+    raise
 
 # Define model features
 cat_encoded_cols = [f"{col}_{val}" for i, col in enumerate(categorical_features) for val in loaded_encoder.categories_[i]]
@@ -96,6 +101,7 @@ except FileNotFoundError as e:
 numerical_ranges = {col: (train_data[col].min(), train_data[col].max()) for col in numerical_features if col in train_data.columns}
 valid_categories = {col: list(loaded_encoder.categories_[i]) for i, col in enumerate(categorical_features)}
 
+# Rest of your routes remain unchanged
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -155,7 +161,6 @@ def visualization():
         if numeric_data.empty:
             return render_template('visualization.html', error="No numeric data available for correlation matrix.")
 
-        # Select top 20 features with the highest variance to reduce clutter
         numeric_data = numeric_data.loc[:, numeric_data.var().nlargest(20).index]
 
         plt.figure(figsize=(12, 10))
