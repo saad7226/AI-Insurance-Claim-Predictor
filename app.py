@@ -1,5 +1,5 @@
 import os
-import gdown  # Replace requests with gdown
+import gdown
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -49,26 +49,16 @@ file_ids = {
     'model_accuracies.pkl': '14hJ2yi3wLLfXr0J-ORlzAeFsY7L178lD'
 }
 
-# Create models directory if it doesn't exist
+# Create models directory if it doesn’t exist
 os.makedirs('models', exist_ok=True)
 
-# Download all .pkl files if they don't exist locally
+# Download all .pkl files if they don’t exist locally
 for filename, file_id in file_ids.items():
     local_path = os.path.join('models', filename)
     download_from_drive(file_id, local_path)
 
-# Load models and preprocessors
+# Load feature info and accuracies (small files) at startup
 try:
-    with open(f'models/rf_model_v{Config.VERSION}.pkl', 'rb') as f:
-        loaded_rf_model = pickle.load(f)
-        logger.info("RF model loaded successfully")
-    with open(f'models/ann_model_v{Config.VERSION}.pkl', 'rb') as f:
-        loaded_ann_model = pickle.load(f)
-        logger.info("ANN model loaded successfully")
-    with open('models/encoder.pkl', 'rb') as f:
-        loaded_encoder = pickle.load(f)
-    with open('models/scaler.pkl', 'rb') as f:
-        loaded_scaler = pickle.load(f)
     with open('models/feature_info.pkl', 'rb') as f:
         feature_info = pickle.load(f)
         original_features = feature_info['original_features']
@@ -86,11 +76,7 @@ except pickle.UnpicklingError as e:
     logger.error(f"Unpickling error: {e}")
     raise
 
-# Define model features
-cat_encoded_cols = [f"{col}_{val}" for i, col in enumerate(categorical_features) for val in loaded_encoder.categories_[i]]
-model_features = numerical_features + cat_encoded_cols
-
-# Load data for analysis
+# Load train_data for analysis (assumed to be reasonable size)
 try:
     train_data = pd.read_csv('train.csv')
     logger.info("train.csv loaded successfully")
@@ -99,9 +85,9 @@ except FileNotFoundError as e:
     train_data = pd.DataFrame(columns=original_features)
 
 numerical_ranges = {col: (train_data[col].min(), train_data[col].max()) for col in numerical_features if col in train_data.columns}
-valid_categories = {col: list(loaded_encoder.categories_[i]) for i, col in enumerate(categorical_features)}
+valid_categories = {col: list(pd.read_pickle('models/encoder.pkl').categories_[i]) for i, col in enumerate(categorical_features)}
 
-# Rest of your routes remain unchanged
+# Routes
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -227,12 +213,16 @@ def prediction():
 
             if categorical_features:
                 try:
+                    with open('models/encoder.pkl', 'rb') as f:
+                        loaded_encoder = pickle.load(f)
                     cat_encoded = loaded_encoder.transform(input_df[categorical_features])
+                    cat_encoded_cols = [f"{col}_{val}" for i, col in enumerate(categorical_features) for val in loaded_encoder.categories_[i]]
                     cat_encoded_df = pd.DataFrame(cat_encoded, columns=cat_encoded_cols)
                     input_df = pd.concat([input_df.drop(categorical_features, axis=1), cat_encoded_df], axis=1)
                 except ValueError as e:
                     raise ValueError(f"Encoding failed: {e}")
 
+            model_features = numerical_features + cat_encoded_cols
             for col in model_features:
                 if col not in input_df.columns:
                     input_df[col] = 0
@@ -240,10 +230,18 @@ def prediction():
             input_df = input_df[model_features]
             logger.info("Final input_df shape: %s", input_df.shape)
 
+            # Lazy load models for prediction
+            with open(f'models/rf_model_v{Config.VERSION}.pkl', 'rb') as f:
+                loaded_rf_model = pickle.load(f)
             rf_pred = loaded_rf_model.predict(input_df)[0]
             rf_result = "High Risk" if rf_pred == 1 else "Low Risk"
 
+            with open('models/scaler.pkl', 'rb') as f:
+                loaded_scaler = pickle.load(f)
             input_scaled = loaded_scaler.transform(input_df)
+
+            with open(f'models/ann_model_v{Config.VERSION}.pkl', 'rb') as f:
+                loaded_ann_model = pickle.load(f)
             ann_pred = loaded_ann_model.predict(input_scaled)[0]
             ann_result = "High Risk" if ann_pred >= 0.5 else "Low Risk"
 
