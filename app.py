@@ -285,4 +285,4 @@ def about():
     return render_template('about.html', team=team)
 
 if __name__ == '__main__':
-    app.run(debug=Config.DEBUG, host='0.0.0.0', port=Config.PORT)
+    app.run(debug=Config.DEBUG, host='0.0.0.0', port=7860)
