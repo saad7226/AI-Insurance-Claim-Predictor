@@ -1,5 +1,5 @@
 import os
-import gdown
+from azure.storage.blob import BlobServiceClient
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -15,54 +15,56 @@ import logging
 app = Flask(__name__, template_folder='templates', static_folder='static')
 app.config.from_object(Config)
 
-# Setup logging to file and console
+# Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', handlers=[
     logging.FileHandler('app.log'),
     logging.StreamHandler()
 ])
 logger = logging.getLogger(__name__)
 
-# Function to download files from Google Drive using gdown
-def download_from_drive(file_id, local_path):
+# Azure Blob Storage configuration
+connection_string = os.environ['AZURE_STORAGE_CONNECTION_STRING']
+blob_service_client = BlobServiceClient.from_connection_string(connection_string)
+container_name = 'insurance-files'
+
+# Function to download files from Blob Storage
+def download_from_blob(blob_name, local_path):
     if not os.path.exists(local_path):
         try:
-            url = f"https://drive.google.com/uc?id={file_id}"
-            gdown.download(url, local_path, quiet=False)
-            # Validate the downloaded file is not an HTML page
-            with open(local_path, 'rb') as f:
-                first_bytes = f.read(10)
-                if first_bytes.startswith(b'<!DOCTYPE') or first_bytes.startswith(b'<html'):
-                    os.remove(local_path)
-                    raise ValueError(f"Downloaded file {local_path} is an HTML page, not the expected file.")
-            logger.info(f"Downloaded {local_path} from Google Drive.")
+            blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
+            with open(local_path, "wb") as f:
+                blob_data = blob_client.download_blob()
+                blob_data.readinto(f)
+            logger.info(f"Downloaded {local_path} from Blob Storage.")
         except Exception as e:
             logger.error(f"Failed to download {local_path}: {e}")
             raise
 
-# File IDs from Google Drive links
-file_ids = {
-    f'rf_model_v{Config.VERSION}.pkl': '1n1BKl3YZmVeYvzA4gzv4Ay7SapbJ44qv',
-    f'ann_model_v{Config.VERSION}.pkl': '1W_DvTaLT5BM3icqgC9wnlYx-vjASGvbg',
-    'encoder.pkl': '1Ec0fuA51vWqp5rLYnGi2GB4sTvAQxFXy',
-    'scaler.pkl': '1WwhZFmSF9X4qtjdc5o9jRj5J80DRW8W1',
-    'feature_info.pkl': '1HoiKpOdE-jhykfvO_sEkC2wqvURVA6w-',
-    'model_accuracies.pkl': '14hJ2yi3wLLfXr0J-ORlzAeFsY7L178lD',
-    'train.csv': '1sauHOKJ6FBplEZuKZQUHiwbkT_OJtWx4',  # train.csv file ID
-    'test.csv': '1Ahd_2xcrlPHUZjrwH3xOCk2Nu7tkdh3M'   # test.csv file ID
-}
+# List of files to download (matches blob names in "insurance-files")
+file_list = [
+    f'rf_model_v{Config.VERSION}.pkl',
+    f'ann_model_v{Config.VERSION}.pkl',
+    'encoder.pkl',
+    'scaler.pkl',
+    'feature_info.pkl',
+    'model_accuracies.pkl',
+    'train.csv',
+    'test.csv'
+]
 
 # Create models directory if it doesn’t exist
 os.makedirs('models', exist_ok=True)
 
-# Download all .pkl files and CSV files if they don’t exist locally
-for filename, file_id in file_ids.items():
+# Download files from Blob Storage
+for filename in file_list:
     if filename.endswith('.pkl'):
         local_path = os.path.join('models', filename)
     else:
-        local_path = filename  # CSV files saved in root directory
-    download_from_drive(file_id, local_path)
+        local_path = filename  # CSV files in root directory
+    blob_name = filename  # Files are directly in the container
+    download_from_blob(blob_name, local_path)
 
-# Load feature info and accuracies at startup
+# Load feature info and accuracies
 try:
     with open('models/feature_info.pkl', 'rb') as f:
         feature_info = pickle.load(f)
@@ -81,10 +83,14 @@ except pickle.UnpicklingError as e:
     logger.error(f"Unpickling error: {e}")
     raise
 
-# Load train_data for analysis
+# Load train_data with optimized dtypes
 try:
-    train_data = pd.read_csv('train.csv')
-    logger.info("train.csv loaded successfully")
+    dtypes = {col: 'category' for col in categorical_features}
+    dtypes.update({col: 'float32' for col in numerical_features})
+    if 'target' in original_features:
+        dtypes['target'] = 'int32'
+    train_data = pd.read_csv('train.csv', dtype=dtypes)
+    logger.info("train.csv loaded successfully with optimized dtypes")
 except Exception as e:
     logger.error(f"Failed to load train.csv: {e}")
     train_data = pd.DataFrame(columns=original_features)
@@ -92,12 +98,12 @@ except Exception as e:
 # Validate train_data
 if train_data.empty or 'target' not in train_data.columns:
     logger.error("train_data is empty or missing 'target' column")
-    train_data = pd.DataFrame(columns=original_features)  # Reset to empty DataFrame
+    train_data = pd.DataFrame(columns=original_features)
 
 numerical_ranges = {col: (train_data[col].min(), train_data[col].max()) for col in numerical_features if col in train_data.columns}
 valid_categories = {col: list(pd.read_pickle('models/encoder.pkl').categories_[i]) for i, col in enumerate(categorical_features)}
 
-# Routes
+# Routes (unchanged from your original code)
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -106,8 +112,7 @@ def index():
 def data_analysis():
     try:
         if train_data.empty or 'target' not in train_data.columns:
-            raise ValueError("train_data is empty or missing 'target' column. Please ensure train.csv is correctly loaded.")
-        
+            raise ValueError("train_data is empty or missing 'target' column.")
         summary = {
             'head': train_data.head().to_html(classes='table table-striped', header="true"),
             'missing': train_data.isnull().sum().to_dict(),
@@ -133,19 +138,15 @@ def data_analysis():
 def preprocessing():
     try:
         if train_data.empty:
-            raise ValueError("train_data is empty. Please ensure train.csv is correctly loaded.")
-        
+            raise ValueError("train_data is empty.")
         missing_count = train_data.isnull().sum().sum()
         if missing_count == 0:
-            results = "<p>No missing values detected in the dataset. Preprocessing steps (imputation and encoding) were applied, but no imputation was necessary.</p>"
+            results = "<p>No missing values detected.</p>"
         else:
-            results = "<p>Imputation and encoding applied. The heatmap below shows missing values (yellow) before preprocessing.</p>"
-
+            results = "<p>Imputation applied. Heatmap shows missing values before preprocessing.</p>"
         plt.figure(figsize=(10, 6))
         sns.heatmap(train_data.isnull(), cmap='viridis', cbar=True)
         plt.title('Missing Values Heatmap (Before)')
-        plt.xlabel('Columns')
-        plt.ylabel('Rows')
         plt.savefig('static/images/missing_heatmap.png', bbox_inches='tight')
         plt.close()
         return render_template('preprocessing.html', results=results)
@@ -157,26 +158,22 @@ def preprocessing():
 def visualization():
     try:
         if not numerical_features:
-            return render_template('visualization.html', error="No numerical features available for correlation matrix.")
-
+            return render_template('visualization.html', error="No numerical features available.")
         numeric_data = train_data[numerical_features].select_dtypes(include=[np.number])
         if numeric_data.empty:
-            return render_template('visualization.html', error="No numeric data available for correlation matrix.")
-
+            return render_template('visualization.html', error="No numeric data available.")
         numeric_data = numeric_data.loc[:, numeric_data.var().nlargest(20).index]
-
         plt.figure(figsize=(12, 10))
         corr = numeric_data.corr()
         mask = np.triu(np.ones_like(corr), k=1)
         sns.heatmap(corr, mask=mask, annot=True, cmap='coolwarm', fmt='.2f', vmin=-1, vmax=1, center=0,
                     annot_kws={"size": 8}, square=True, cbar_kws={"shrink": .5})
-        plt.title('Correlation Matrix of Top 20 Numerical Features', fontsize=14, pad=20)
+        plt.title('Correlation Matrix of Top 20 Numerical Features')
         plt.xticks(rotation=45, ha='right', fontsize=10)
         plt.yticks(rotation=0, fontsize=10)
         plt.tight_layout()
         plt.savefig('static/images/corr_matrix.png', bbox_inches='tight', dpi=300)
         plt.close()
-
         return render_template('visualization.html')
     except Exception as e:
         logger.error(f"Error in visualization: {e}")
@@ -188,12 +185,9 @@ def prediction():
     prediction = None
     try:
         if request.method == 'POST':
-            logger.info("Received POST request for prediction")
-            logger.info(f"Form data: {request.form}")
             input_data = {}
             for feat in original_features:
                 value = request.form.get(feat)
-                logger.info(f"Processing feature: {feat}, value: {value}")
                 if not value:
                     if feat in numerical_features:
                         input_data[feat] = medians.get(feat, 0)
@@ -201,42 +195,30 @@ def prediction():
                         input_data[feat] = -1
                 else:
                     if feat in numerical_features:
-                        try:
-                            value_float = float(value)
-                            min_val, max_val = numerical_ranges.get(feat, (None, None))
-                            if min_val is not None and max_val is not None:
-                                if value_float < min_val or value_float > max_val:
-                                    raise ValueError(f"Value for {feat} ({value_float}) is out of range [{min_val}, {max_val}]")
-                            input_data[feat] = value_float
-                        except ValueError as e:
-                            raise ValueError(str(e))
+                        value_float = float(value)
+                        min_val, max_val = numerical_ranges.get(feat, (None, None))
+                        if min_val is not None and max_val is not None:
+                            if value_float < min_val or value_float > max_val:
+                                raise ValueError(f"Value for {feat} out of range [{min_val}, {max_val}]")
+                        input_data[feat] = value_float
                     else:
-                        try:
-                            value_int = int(value)
-                        except ValueError:
-                            raise ValueError(f"Invalid input for {feat}: {value}. Must be an integer.")
+                        value_int = int(value)
                         if value_int not in valid_categories.get(feat, []):
-                            raise ValueError(f"Invalid category for {feat}. Valid values are: {valid_categories.get(feat, [])}")
+                            raise ValueError(f"Invalid category for {feat}: {valid_categories.get(feat, [])}")
                         input_data[feat] = value_int
 
-            logger.info("Input data prepared: %s", input_data)
             input_df = pd.DataFrame([input_data])
-            logger.info("input_df shape: %s", input_df.shape)
-
             for col in numerical_features:
                 if pd.isna(input_df[col].iloc[0]):
                     input_df[col] = medians.get(col, 0)
 
             if categorical_features:
-                try:
-                    with open('models/encoder.pkl', 'rb') as f:
-                        loaded_encoder = pickle.load(f)
-                    cat_encoded = loaded_encoder.transform(input_df[categorical_features])
-                    cat_encoded_cols = [f"{col}_{val}" for i, col in enumerate(categorical_features) for val in loaded_encoder.categories_[i]]
-                    cat_encoded_df = pd.DataFrame(cat_encoded, columns=cat_encoded_cols)
-                    input_df = pd.concat([input_df.drop(categorical_features, axis=1), cat_encoded_df], axis=1)
-                except ValueError as e:
-                    raise ValueError(f"Encoding failed: {e}")
+                with open('models/encoder.pkl', 'rb') as f:
+                    loaded_encoder = pickle.load(f)
+                cat_encoded = loaded_encoder.transform(input_df[categorical_features])
+                cat_encoded_cols = [f"{col}_{val}" for i, col in enumerate(categorical_features) for val in loaded_encoder.categories_[i]]
+                cat_encoded_df = pd.DataFrame(cat_encoded, columns=cat_encoded_cols)
+                input_df = pd.concat([input_df.drop(categorical_features, axis=1), cat_encoded_df], axis=1)
 
             model_features = numerical_features + cat_encoded_cols
             for col in model_features:
@@ -244,9 +226,6 @@ def prediction():
                     input_df[col] = 0
 
             input_df = input_df[model_features]
-            logger.info("Final input_df shape: %s", input_df.shape)
-
-            # Lazy load models for prediction
             with open(f'models/rf_model_v{Config.VERSION}.pkl', 'rb') as f:
                 loaded_rf_model = pickle.load(f)
             rf_pred = loaded_rf_model.predict(input_df)[0]
@@ -267,8 +246,6 @@ def prediction():
                 'rf_acc': rf_accuracy,
                 'ann_acc': ann_accuracy
             }
-            logger.info("Prediction successful: RF=%s, ANN=%s", rf_result, ann_result)
-
         return render_template('prediction.html', prediction=prediction, original_features=original_features, rf_accuracy=rf_accuracy, ann_accuracy=ann_accuracy, error=error)
     except Exception as e:
         logger.error(f"Error in prediction: {e}")
@@ -280,9 +257,10 @@ def about():
     team = [
         {'name': 'Muhammad Saad Zafar', 'desc': 'Lead Developer', 'image': 'member1.jpg'},
         {'name': 'Muhammad Humayun Farasat', 'desc': 'Data Analyst', 'image': 'member2.jpg'},
-        {'name': 'Muhammad Arsalan Aslam ', 'desc': 'ML Engineer', 'image': 'member3.jpg'}
+        {'name': 'Muhammad Arsalan Aslam', 'desc': 'ML Engineer', 'image': 'member3.jpg'}
     ]
     return render_template('about.html', team=team)
 
 if __name__ == '__main__':
-    app.run(debug=Config.DEBUG, host='0.0.0.0', port=7860)
+    port = int(os.environ.get('PORT', Config.PORT))
+    app.run(debug=Config.DEBUG, host='0.0.0.0', port=port)
